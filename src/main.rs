@@ -1,5 +1,7 @@
+use crate::logic::main_game;
+
 mod logic;
 
-fn main() {
-    println!("Hello, world!");
+fn main()   {
+    main_game()
 }

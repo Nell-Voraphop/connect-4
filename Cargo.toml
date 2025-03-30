@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+term-table = "1.4.0"
+rayon = "1.10.0"
+figlet-rs = "0.1.2"
+colored = "*"
