@@ -128,6 +128,30 @@ fn is_game_over(board: &Vec<char>) -> bool {
     true
 }
 
+fn possible_move(board: &mut Vec<char>) -> Vec<usize> {
+    let mut new_lst: Vec<usize> = Vec::new();
+    for i in 1..8 {
+        if is_available(board, i) {
+            new_lst.push(i as usize);
+        }
+    }
+    new_lst
+}
+
+fn is_available(board: &mut Vec<char>, slot: i32) -> bool{
+    let mut state: bool = true;
+    for i in 1..7 {
+        if board[(-7*i + 41 + slot) as usize] != ' ' && i != 6{
+            continue
+        }
+        else if board[(-7*i + 41 + slot) as usize] != ' ' && i == 6{
+            state = false
+        }
+
+    }
+    state
+}
+
 fn top_layout() {
     let standard_font = FIGfont::standard().unwrap();
     let figure = standard_font.convert("Connect  Four").unwrap();
