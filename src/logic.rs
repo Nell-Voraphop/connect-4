@@ -152,6 +152,31 @@ fn is_available(board: &mut Vec<char>, slot: i32) -> bool{
     state
 }
 
+fn fill(board: &mut Vec<char>, slot: usize, side: char) {
+    for i in 1..7 {
+        let temp_slot :i32 = slot.wrapping_sub(1) as i32;
+        if board[(-7*i + 42 + temp_slot) as usize] != ' ' {
+            continue
+        }
+        else {
+            board[(-7*i + 42 + temp_slot) as usize] = side;
+            break
+        }
+    }
+}
+
+fn remove(board: &mut Vec<char>, slot: i32) {
+    for i in 1..7 {
+        if board[(7*i - 8 + slot) as usize] == ' ' {
+            continue
+        }
+        else {
+            board[(7*i - 8 + slot) as usize] = ' ';
+            break
+        }
+    }
+}
+
 fn top_layout() {
     let standard_font = FIGfont::standard().unwrap();
     let figure = standard_font.convert("Connect  Four").unwrap();
