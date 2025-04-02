@@ -1,9 +1,108 @@
 use term_table::table_cell::{Alignment, TableCell};
 use term_table::{TableBuilder, TableStyle};
+use rand::prelude::*;
 use term_table::row::Row;
+use std::process::exit;
+use std::time::Instant;
 use rayon::prelude::*;
 use figlet_rs::*;
 use colored::*;
+use std::io;
+
+fn logic() {
+    let mut input_text_lvl = String::new();
+    println!("\nChoose the level of the bot (0-8) \r");
+    io::stdin()
+        .read_line(&mut input_text_lvl)
+        .expect("failed to read from stdin");
+
+    let level: usize = input_text_lvl.trim().parse::<usize>().unwrap_or_else(|_| {
+        println!("This is not a number");
+        exit(0)
+    });
+    if level > 9 || level < 0 {
+        println!("There are only 0-8 levels");
+        exit(0)
+    }
+
+    let mut board_vec: Vec<char> = vec![' '; 42];
+    draw_table_board(&mut board_vec);
+
+    loop {
+        let mut input_text = String::new();
+        println!("\nType in the slot number you want to play (1-7): \r");
+        io::stdin()
+            .read_line(&mut input_text)
+            .expect("failed to read from stdin");
+
+        let slot: usize = match input_text.trim().parse::<usize>() {
+            Ok(num) => num,
+            Err(_) => {
+                println!("This is not a number");
+                break;
+            }
+        };
+
+        if slot.to_string().trim().parse::<usize>().is_ok() {
+            if slot <= 7 && slot > 0 && is_available(&mut board_vec, slot as i32) {
+                fill(&mut board_vec, slot, 'X');
+                draw_table_board(&mut board_vec);
+                println!("Actual Board Score = { }", evaluate_board(&mut board_vec));
+                if is_game_over(&mut board_vec) && possible_move(&mut board_vec).is_empty(){
+                    let standard_font = FIGfont::standard().unwrap();
+                    let drawer = standard_font.convert("It\'s a Draw!").unwrap();
+                    println!("\n{}", drawer.to_string().magenta());
+                    break;
+                }
+                else if is_game_over(&mut board_vec) && !possible_move(&mut board_vec).is_empty(){
+                    let standard_font = FIGfont::standard().unwrap();
+
+                    let x_winner = standard_font.convert("X Wins").unwrap();
+                    println!("\n{}", x_winner.to_string().green());
+                    break;
+                }
+                let start_time = Instant::now();
+
+                let bot = par_minimax(&mut board_vec, level as i32, false);
+                //###################################################################################################################
+
+                let best_move = bot.0;
+                let score = bot.1;
+                fill(&mut board_vec, best_move.unwrap(), 'O');
+                let end_time = start_time.elapsed();
+                let seconds = end_time.as_secs();
+                let millis = end_time.subsec_millis();
+                draw_table_board(&mut board_vec);
+                println!("Bot drops slot number : {:?}", best_move.unwrap());
+                println!("Time Taken: {}.{} seconds", seconds, millis);
+                println!("Board Score = { }", score);
+                println!("Actual Board Score = { }", evaluate_board(&mut board_vec));
+                if is_game_over(&mut board_vec) && possible_move(&mut board_vec).is_empty(){
+                    let standard_font = FIGfont::standard().unwrap();
+                    let drawer = standard_font.convert("It\'s a Draw!").unwrap();
+                    println!("\n{}", drawer.to_string().magenta());
+                    break;
+                }
+                else if is_game_over(&mut board_vec) && !possible_move(&mut board_vec).is_empty(){
+                    let standard_font = FIGfont::standard().unwrap();
+
+                    let x_winner = standard_font.convert("You Suck").unwrap();
+                    println!("\n{}", x_winner.to_string().green());
+                    break;
+                }
+            } else {
+                if slot <= 7 && slot > 0 {
+                    println!("Number out of range")
+                }
+                else {
+                    println!("Slot number {} is already full", slot)
+                }
+            }
+        } else {
+            println!("This is not a number.");
+        }
+    }
+}
 
 fn draw_table_board(board: &mut Vec<char>) {
     let table = TableBuilder::new().style(TableStyle::extended()).rows(
@@ -260,6 +359,64 @@ fn top_layout() {
     let standard_font = FIGfont::standard().unwrap();
     let figure = standard_font.convert("Connect  Four").unwrap();
     println!("{}", figure.to_string().blue());
+}
+
+fn par_minimax(board: &mut Vec<char>, depth: i32, maximizing_player: bool) -> (Option<usize>, i32) {
+
+    if depth == 0 || is_game_over(board) {
+        return (None, evaluate_board(board));
+    }
+
+    let moves = possible_move(board);
+    let mut best_move = *moves.choose(&mut rand::thread_rng()).unwrap();
+
+    if maximizing_player {
+        let max_eval = moves
+            .par_iter()
+            .map(|&col| {
+                let mut copy_board = board.clone();
+                fill(&mut copy_board, col, 'X');
+                let current_eval = par_minimax(&mut copy_board, depth - 1, false).1;
+                remove(&mut copy_board, col as i32);
+                (col, current_eval)
+            })
+            .reduce(
+                || (best_move as usize, i32::MIN),
+                |left, right| {
+                    if left.1 > right.1 {
+                        left
+                    } else {
+                        right
+                    }
+                },
+            );
+
+        best_move = max_eval.0;
+        return (Some(best_move), max_eval.1);
+    } else {
+        let min_eval = moves
+            .par_iter()
+            .map(|&col| {
+                let mut copy_board = board.clone();
+                fill(&mut copy_board, col, 'O');
+                let current_eval = par_minimax(&mut copy_board, depth - 1, true).1;
+                remove(&mut copy_board, col as i32);
+                (col, current_eval)
+            })
+            .reduce(
+                || (best_move as usize, i32::MAX),
+                |left, right| {
+                    if left.1 < right.1 {
+                        left
+                    } else {
+                        right
+                    }
+                },
+            );
+
+        best_move = min_eval.0;
+        return (Some(best_move), min_eval.1);
+    }
 }
 
 pub fn main_game(){
