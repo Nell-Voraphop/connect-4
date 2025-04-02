@@ -228,7 +228,7 @@ fn is_game_over(board: &Vec<char>) -> bool {
     true
 }
 
-fn possible_move(board: &mut Vec<char>) -> Vec<usize> {
+fn possible_move(board: &Vec<char>) -> Vec<usize> {
     let mut new_lst: Vec<usize> = Vec::new();
     for i in 1..8 {
         if is_available(board, i) {
@@ -238,7 +238,7 @@ fn possible_move(board: &mut Vec<char>) -> Vec<usize> {
     new_lst
 }
 
-fn is_available(board: &mut Vec<char>, slot: i32) -> bool{
+fn is_available(board: &Vec<char>, slot: i32) -> bool{
     let mut state: bool = true;
     for i in 1..7 {
         if board[(-7*i + 41 + slot) as usize] != ' ' && i != 6{
@@ -277,7 +277,7 @@ fn remove(board: &mut Vec<char>, slot: i32) {
     }
 }
 
-fn evaluate_board(board: &mut Vec<char>) -> i32 {
+fn evaluate_board(board: &Vec<char>) -> i32 {
     let mut score = 0;
 
     // Evaluate rows
@@ -361,65 +361,90 @@ fn top_layout() {
     println!("{}", figure.to_string().blue());
 }
 
-fn par_minimax(board: &mut Vec<char>, depth: i32, maximizing_player: bool) -> (Option<usize>, i32) {
-
+fn par_minimax(board: &Vec<char>, depth: i32, maximizing_player: bool) -> (Option<usize>, i32) {
     if depth == 0 || is_game_over(board) {
         return (None, evaluate_board(board));
+    };
+
+    let moves = possible_move(board);
+    let mut rng = rand::thread_rng();
+    let default_move = *moves.choose(&mut rng).unwrap();
+
+    let results: Vec<(usize, i32)> = moves
+        .par_iter()
+        .map(|&col| {
+            let mut copy_board = board.clone();
+            let player = if maximizing_player { 'X' } else { 'O' };
+            fill(&mut copy_board, col, player);
+            let score = alpha_beta(&mut copy_board, depth - 1, i32::MIN, i32::MAX, !maximizing_player);
+            (col, score)
+        })
+        .collect();
+
+    let best = if maximizing_player {
+        results.into_iter().max_by_key(|&(_, score)| score).unwrap_or((default_move, 0))
+    } else {
+        results.into_iter().min_by_key(|&(_, score)| score).unwrap_or((default_move, 0))
+    };
+
+    (Some(best.0), best.1)
+}
+
+fn alpha_beta(board: &mut Vec<char>, depth: i32, mut alpha: i32, mut beta: i32, maximizing: bool) -> i32 {
+    if depth == 0 || is_game_over(board) {
+        return evaluate_board(board);
     }
 
     let moves = possible_move(board);
-    let mut best_move = *moves.choose(&mut rand::thread_rng()).unwrap();
 
-    if maximizing_player {
-        let max_eval = moves
-            .par_iter()
-            .map(|&col| {
-                let mut copy_board = board.clone();
-                fill(&mut copy_board, col, 'X');
-                let current_eval = par_minimax(&mut copy_board, depth - 1, false).1;
-                remove(&mut copy_board, col as i32);
-                (col, current_eval)
-            })
-            .reduce(
-                || (best_move as usize, i32::MIN),
-                |left, right| {
-                    if left.1 > right.1 {
-                        left
-                    } else {
-                        right
-                    }
-                },
-            );
-
-        best_move = max_eval.0;
-        return (Some(best_move), max_eval.1);
+    if maximizing {
+        let mut max_eval = i32::MIN;
+        for &col in &moves {
+            fill(board, col, 'X');
+            let eval = alpha_beta(board, depth - 1, alpha, beta, false);
+            remove(board, col as i32);
+            max_eval = max_eval.max(eval);
+            alpha = alpha.max(eval);
+            if beta <= alpha {
+                break; // Beta cut-off
+            }
+        }
+        max_eval
     } else {
-        let min_eval = moves
-            .par_iter()
-            .map(|&col| {
-                let mut copy_board = board.clone();
-                fill(&mut copy_board, col, 'O');
-                let current_eval = par_minimax(&mut copy_board, depth - 1, true).1;
-                remove(&mut copy_board, col as i32);
-                (col, current_eval)
-            })
-            .reduce(
-                || (best_move as usize, i32::MAX),
-                |left, right| {
-                    if left.1 < right.1 {
-                        left
-                    } else {
-                        right
-                    }
-                },
-            );
-
-        best_move = min_eval.0;
-        return (Some(best_move), min_eval.1);
+        let mut min_eval = i32::MAX;
+        for &col in &moves {
+            fill(board, col, 'O');
+            let eval = alpha_beta(board, depth - 1, alpha, beta, true);
+            remove(board, col as i32);
+            min_eval = min_eval.min(eval);
+            beta = beta.min(eval);
+            if beta <= alpha {
+                break; // Alpha cut-off
+            }
+        }
+        min_eval
     }
 }
 
-pub fn main_game(){
-    let mut board_vec: Vec<char> = vec![' '; 42];
-    draw_table_board(&mut board_vec);
+pub fn main_game() {
+    top_layout();
+    println!("\nWelcome to Connect 4 Game! Your goal is to connect 4 red in order to win the game.\n\
+                You can only type in the number in range of 1 to 7, the number you type in will drop the red piece into the column of your input. \n\
+                The board is already provided you the number of column. Have fun ^^");
+
+    loop {
+        logic();
+        println!("\n\nContinue playing? (y/n): ");
+        let mut response = String::new();
+        io::stdin()
+            .read_line(&mut response)
+            .expect("Invalid input!");
+        if response.contains(&"n") {
+            println!("{}", "Exiting program ...".to_string().red());
+            exit(0);
+        }
+        else {
+            continue;
+        }
+    }
 }
