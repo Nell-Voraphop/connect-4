@@ -1,6 +1,7 @@
 use term_table::table_cell::{Alignment, TableCell};
 use term_table::{TableBuilder, TableStyle};
 use term_table::row::Row;
+use rayon::prelude::*;
 use figlet_rs::*;
 use colored::*;
 
@@ -175,6 +176,84 @@ fn remove(board: &mut Vec<char>, slot: i32) {
             break
         }
     }
+}
+
+fn evaluate_board(board: &mut Vec<char>) -> i32 {
+    let mut score = 0;
+
+    // Evaluate rows
+    for i in 0..6 {
+        for j in 0..4 {
+            let index = i * 7 + j;
+            let row: Vec<char> = board[index..(index + 4)].to_vec();
+            score += evaluate_sequence(&row);
+        }
+    }
+
+    // Evaluate columns
+    for i in 0..3 {
+        for j in 0..7 {
+            let index = i * 7 + j;
+            let column: Vec<char> = vec![
+                board[index],
+                board[index + 7],
+                board[index + 14],
+                board[index + 21],
+            ];
+            score += evaluate_sequence(&column);
+        }
+    }
+
+    // Evaluate diagonals
+    for i in 0..3 {
+        for j in 0..4 {
+            let index = i * 7 + j;
+            let diagonal1: Vec<char> = vec![
+                board[index],
+                board[index + 8],
+                board[index + 16],
+                board[index + 24],
+            ];
+            score += evaluate_sequence(&diagonal1);
+
+            let diagonal2: Vec<char> = vec![
+                board[index + 3],
+                board[index + 9],
+                board[index + 15],
+                board[index + 21],
+            ];
+            score += evaluate_sequence(&diagonal2);
+        }
+    }
+    score
+}
+
+fn evaluate_sequence(sequence: &Vec<char>) -> i32 {
+    let mut score = 0;
+    // Evaluate the number of player pieces and empty spaces in the sequence
+    let player_count = sequence.iter().filter(|&c| *c == 'X').count();
+    let opponent_count = sequence.iter().filter(|&c| *c == 'O').count();
+    let empty_count = sequence.iter().filter(|&c| *c == ' ').count();
+
+    // Assign a score based on the number of player pieces and empty spaces
+    if player_count == 4 {
+        score += 1000;
+    } else if player_count == 3 && empty_count == 1 {
+        score += 5;
+    } else if player_count == 2 && empty_count == 2 {
+        score += 2;
+    }
+
+    // Subtract a score based on the number of opponent pieces in the sequence
+    if opponent_count == 4 {
+        score -= 1000;
+    }
+    if opponent_count == 3 && empty_count == 1 {
+        score -= 5;
+    } else if opponent_count == 2 && empty_count == 2 {
+        score -= 2;
+    }
+    score
 }
 
 fn top_layout() {
